@@ -1,0 +1,41 @@
+version: '3.8'
+
+services:
+  welding-simulator:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    image: shopfloor-simulator:latest
+    container_name: welding-robot-01
+    ports:
+      - "4840:4840"   # OPC UA
+      - "8081:8081"   # Health check
+    environment:
+      - SIMULATOR_NAME=WeldingRobot-01
+      - OPCUA_PORT=4840
+      - HEALTH_PORT=8081
+      - ERP_ENDPOINT=http://host.docker.internal:9000
+      - CYCLE_TIME=60s
+      - SETUP_TIME=45s
+      - SCRAP_RATE=0.03
+      - ERROR_RATE=0.02
+      - ORDER_MIN_QTY=50
+      - ORDER_MAX_QTY=200
+      - TIMEZONE=Europe/Berlin
+      - SHIFT_MODEL=3-shift
+    restart: unless-stopped
+    healthcheck:
+      test: ["CMD", "wget", "--no-verbose", "--tries=1", "--spider", "http://localhost:8081/health"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 10s
+
+  # Optional: Mock ERP server for testing
+  # Uncomment to run a simple echo server that logs incoming requests
+  # mock-erp:
+  #   image: hashicorp/http-echo
+  #   container_name: mock-erp
+  #   ports:
+  #     - "9000:9000"
+  #   command: ["-listen=:9000", "-text=OK"]

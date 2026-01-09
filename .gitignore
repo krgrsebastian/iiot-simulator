@@ -1,0 +1,11 @@
+# Binaries
+simulator
+*.exe
+
+# IDE
+.idea/
+.vscode/
+
+# OS
+.DS_Store
+
