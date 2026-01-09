@@ -13,11 +13,62 @@ A realistic shopfloor simulator that generates production data for a simulated w
 
 ## Quick Start
 
-### Using Docker
+### Using Docker Hub Image (Recommended)
+
+Pull and run directly from Docker Hub:
 
 ```bash
-# Build and run
+docker run -d \
+  --name welding-simulator \
+  -p 4840:4840 \
+  -p 8081:8081 \
+  -e CYCLE_TIME=30s \
+  -e SCRAP_RATE=0.05 \
+  skumh/iiot-simulator:latest
+```
+
+Or use this `docker-compose.yml`:
+
+```yaml
+services:
+  welding-simulator:
+    image: skumh/iiot-simulator:latest
+    container_name: welding-simulator
+    ports:
+      - "4840:4840"   # OPC UA
+      - "8081:8081"   # Health check
+    environment:
+      - SIMULATOR_NAME=WeldingRobot-01
+      - CYCLE_TIME=30s
+      - SETUP_TIME=15s
+      - SCRAP_RATE=0.05
+      - ERROR_RATE=0.03
+      - TIMEZONE=Europe/Berlin
+      # Optional: Connect to an ERP endpoint
+      # - ERP_ENDPOINT=http://your-erp:8080
+      # - ERP_ORDER_PATH=/api/v1/production-orders
+      # - ERP_SHIFT_PATH=/api/v1/shifts
+    healthcheck:
+      test: ["CMD", "wget", "--no-verbose", "--tries=1", "--spider", "http://localhost:8081/health"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 10s
+    restart: unless-stopped
+```
+
+Then run:
+
+```bash
 docker-compose up -d
+docker-compose logs -f
+```
+
+### Building from Source
+
+```bash
+# Build and run locally
+docker-compose up -d --build
 
 # View logs
 docker-compose logs -f
