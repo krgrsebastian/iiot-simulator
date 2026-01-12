@@ -20,6 +20,7 @@ import (
 	"github.com/awcullen/opcua/ua"
 	"github.com/rs/zerolog/log"
 
+	"github.com/sebastiankruger/shopfloor-simulator/internal/core"
 	"github.com/sebastiankruger/shopfloor-simulator/internal/simulator"
 )
 
@@ -29,16 +30,29 @@ const (
 	keyFile  = "./pki/server.key"
 )
 
-// Server wraps the OPC UA server and manages node values
+// NamespaceNodes holds nodes for a specific namespace
+type NamespaceNodes struct {
+	Namespace  uint16
+	FolderName string
+	VarNodes   map[string]*server.VariableNode
+	Values     map[string]interface{}
+}
+
+// Server wraps the OPC UA server and manages node values for multiple namespaces
 type Server struct {
-	srv       *server.Server
-	port      int
+	srv  *server.Server
+	port int
+	mu   sync.RWMutex
+
+	// Multi-namespace support
+	namespaces map[uint16]*NamespaceNodes
+
+	// Legacy single-namespace support (for backward compatibility)
 	namespace uint16
 	nodes     map[string]*NodeInfo
-	varNodes  map[string]*server.VariableNode // OPC UA variable nodes for value updates
-	mu        sync.RWMutex
+	varNodes  map[string]*server.VariableNode
 
-	// Node references for quick access
+	// Legacy node references for welding robot
 	currentNode       ua.NodeID
 	voltageNode       ua.NodeID
 	wireFeedNode      ua.NodeID
@@ -71,9 +85,10 @@ type NodeInfo struct {
 // NewServer creates a new OPC UA server
 func NewServer(port int, simulatorName string) (*Server, error) {
 	s := &Server{
-		port:     port,
-		nodes:    make(map[string]*NodeInfo),
-		varNodes: make(map[string]*server.VariableNode),
+		port:       port,
+		namespaces: make(map[uint16]*NamespaceNodes),
+		nodes:      make(map[string]*NodeInfo),
+		varNodes:   make(map[string]*server.VariableNode),
 	}
 
 	return s, nil
@@ -123,13 +138,13 @@ func createSelfSignedCert(appName, certPath, keyPath string) error {
 		KeyUsage:              x509.KeyUsageDigitalSignature | x509.KeyUsageKeyEncipherment,
 		ExtKeyUsage:           []x509.ExtKeyUsage{x509.ExtKeyUsageServerAuth, x509.ExtKeyUsageClientAuth},
 		BasicConstraintsValid: true,
-		DNSNames:              []string{"localhost", appName, "welding-simulator", "welding-robot"},
+		DNSNames:              []string{"localhost", appName, "production-line-simulator", "shopfloor-simulator"},
 		IPAddresses:           []net.IP{net.ParseIP("127.0.0.1"), net.ParseIP("0.0.0.0")},
 	}
 
 	// Add OPC UA application URI as SAN
 	template.URIs = []*url.URL{
-		{Scheme: "urn", Opaque: "shopfloor-simulator:welding-robot"},
+		{Scheme: "urn", Opaque: "shopfloor-simulator:production-line"},
 	}
 
 	// Create self-signed certificate
@@ -178,11 +193,11 @@ func (s *Server) Start(ctx context.Context) error {
 		Str("endpoint", endpoint).
 		Msg("Starting OPC UA server")
 
-	// Initialize node references (for value storage even if server fails to start)
+	// Initialize legacy node references (for backward compatibility)
 	s.initializeNodeReferences()
 
 	// Generate self-signed certificates if needed
-	if err := ensurePKI("WeldingRobotSimulator"); err != nil {
+	if err := ensurePKI("ProductionLineSimulator"); err != nil {
 		log.Warn().Err(err).Msg("Failed to create PKI - OPC UA server disabled")
 		log.Info().Msg("OPC UA server disabled - running simulator in data generation mode only")
 		return nil
@@ -202,9 +217,9 @@ func (s *Server) Start(ctx context.Context) error {
 		var err error
 		srv, err = server.New(
 			ua.ApplicationDescription{
-				ApplicationURI:  "urn:shopfloor-simulator:welding-robot",
+				ApplicationURI:  "urn:shopfloor-simulator:production-line",
 				ProductURI:      "urn:shopfloor-simulator",
-				ApplicationName: ua.LocalizedText{Text: "Welding Robot Simulator", Locale: "en"},
+				ApplicationName: ua.LocalizedText{Text: "Production Line Simulator", Locale: "en"},
 				ApplicationType: ua.ApplicationTypeServer,
 			},
 			certFile, // Self-signed certificate
@@ -229,7 +244,7 @@ func (s *Server) Start(ctx context.Context) error {
 
 	s.srv = srv
 
-	// Register nodes in address space BEFORE starting server
+	// Register legacy welding nodes for backward compatibility
 	if err := s.createNodes(); err != nil {
 		log.Error().Err(err).Msg("Failed to create OPC UA nodes")
 		return err
@@ -258,6 +273,131 @@ func (s *Server) Stop(ctx context.Context) error {
 	}
 	return nil
 }
+
+// RegisterNamespace creates a new namespace with a root folder and variable nodes
+func (s *Server) RegisterNamespace(nsIndex uint16, folderName, folderDesc string, nodes []core.NodeDefinition) error {
+	if s.srv == nil {
+		// Store namespace info even if server is not running (for value storage mode)
+		ns := &NamespaceNodes{
+			Namespace:  nsIndex,
+			FolderName: folderName,
+			VarNodes:   make(map[string]*server.VariableNode),
+			Values:     make(map[string]interface{}),
+		}
+		for _, nodeDef := range nodes {
+			ns.Values[nodeDef.Name] = nodeDef.InitialValue
+		}
+		s.namespaces[nsIndex] = ns
+		return nil
+	}
+
+	s.mu.Lock()
+	defer s.mu.Unlock()
+
+	nm := s.srv.NamespaceManager()
+
+	// Create folder node under Objects folder
+	folder := server.NewObjectNode(
+		s.srv,
+		ua.NodeIDString{NamespaceIndex: nsIndex, ID: folderName},
+		ua.QualifiedName{NamespaceIndex: nsIndex, Name: folderName},
+		ua.LocalizedText{Text: folderName},
+		ua.LocalizedText{Text: folderDesc},
+		nil,
+		[]ua.Reference{
+			{
+				ReferenceTypeID: ua.ReferenceTypeIDOrganizes,
+				IsInverse:       true,
+				TargetID:        ua.ExpandedNodeID{NodeID: ua.ObjectIDObjectsFolder},
+			},
+		},
+		0,
+	)
+	nm.AddNode(folder)
+
+	// Create namespace nodes storage
+	ns := &NamespaceNodes{
+		Namespace:  nsIndex,
+		FolderName: folderName,
+		VarNodes:   make(map[string]*server.VariableNode),
+		Values:     make(map[string]interface{}),
+	}
+
+	// Create variable nodes
+	for _, nodeDef := range nodes {
+		varNode := server.NewVariableNode(
+			s.srv,
+			ua.NodeIDString{NamespaceIndex: nsIndex, ID: folderName + "." + nodeDef.Name},
+			ua.QualifiedName{NamespaceIndex: nsIndex, Name: nodeDef.Name},
+			ua.LocalizedText{Text: nodeDef.DisplayName},
+			ua.LocalizedText{Text: nodeDef.Description},
+			nil,
+			[]ua.Reference{
+				{
+					ReferenceTypeID: ua.ReferenceTypeIDHasComponent,
+					IsInverse:       true,
+					TargetID:        ua.ExpandedNodeID{NodeID: ua.NodeIDString{NamespaceIndex: nsIndex, ID: folderName}},
+				},
+			},
+			ua.NewDataValue(nodeDef.InitialValue, 0, time.Now().UTC(), 0, time.Now().UTC(), 0),
+			core.OPCUADataType(nodeDef.DataType),
+			ua.ValueRankScalar,
+			[]uint32{},
+			ua.AccessLevelsCurrentRead,
+			250.0,
+			false,
+			nil,
+		)
+		nm.AddNode(varNode)
+		ns.VarNodes[nodeDef.Name] = varNode
+		ns.Values[nodeDef.Name] = nodeDef.InitialValue
+	}
+
+	s.namespaces[nsIndex] = ns
+
+	log.Info().
+		Uint16("namespace", nsIndex).
+		Str("folder", folderName).
+		Int("nodes", len(nodes)).
+		Msg("Registered OPC UA namespace")
+
+	return nil
+}
+
+// UpdateNamespaceValues updates all values for a namespace
+func (s *Server) UpdateNamespaceValues(nsIndex uint16, values map[string]interface{}) {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+
+	ns, ok := s.namespaces[nsIndex]
+	if !ok {
+		return
+	}
+
+	now := time.Now().UTC()
+	for name, value := range values {
+		ns.Values[name] = value
+		if varNode, ok := ns.VarNodes[name]; ok {
+			varNode.SetValue(ua.NewDataValue(value, 0, now, 0, now, 0))
+		}
+	}
+}
+
+// GetNamespaceValue returns a value from a namespace
+func (s *Server) GetNamespaceValue(nsIndex uint16, name string) (interface{}, bool) {
+	s.mu.RLock()
+	defer s.mu.RUnlock()
+
+	ns, ok := s.namespaces[nsIndex]
+	if !ok {
+		return nil, false
+	}
+
+	value, ok := ns.Values[name]
+	return value, ok
+}
+
+// Legacy methods for backward compatibility with welding robot
 
 func (s *Server) createNodes() error {
 	s.namespace = 2 // Use namespace index 2 for our custom nodes
@@ -397,7 +537,7 @@ func (s *Server) setNodeValue(name string, value interface{}, timestamp time.Tim
 	}
 }
 
-// UpdateValues updates all OPC UA node values from timeseries data
+// UpdateValues updates all OPC UA node values from timeseries data (legacy method)
 func (s *Server) UpdateValues(data *simulator.TimeseriesData) {
 	s.mu.Lock()
 	defer s.mu.Unlock()
@@ -448,7 +588,7 @@ func (s *Server) UpdateValues(data *simulator.TimeseriesData) {
 	}
 }
 
-// GetNodeValue returns the current value of a node
+// GetNodeValue returns the current value of a node (legacy method)
 func (s *Server) GetNodeValue(name string) (interface{}, bool) {
 	s.mu.RLock()
 	defer s.mu.RUnlock()
@@ -459,7 +599,7 @@ func (s *Server) GetNodeValue(name string) (interface{}, bool) {
 	return nil, false
 }
 
-// GetAllValues returns all current node values as a map
+// GetAllValues returns all current node values as a map (legacy method)
 func (s *Server) GetAllValues() map[string]interface{} {
 	s.mu.RLock()
 	defer s.mu.RUnlock()
