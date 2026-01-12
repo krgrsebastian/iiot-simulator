@@ -116,12 +116,13 @@ type Part struct {
 type PartStatus string
 
 const (
-	PartStatusInForming     PartStatus = "IN_FORMING"
-	PartStatusAwaitingPickup PartStatus = "AWAITING_PICKUP"
-	PartStatusInTransit     PartStatus = "IN_TRANSIT"
-	PartStatusBeingWelded   PartStatus = "BEING_WELDED"
-	PartStatusComplete      PartStatus = "COMPLETE"
-	PartStatusScrap         PartStatus = "SCRAP"
+	PartStatusInForming       PartStatus = "IN_FORMING"
+	PartStatusAwaitingPickup  PartStatus = "AWAITING_PICKUP"
+	PartStatusInTransit       PartStatus = "IN_TRANSIT"
+	PartStatusAwaitingWelding PartStatus = "AWAITING_WELDING"
+	PartStatusBeingWelded     PartStatus = "BEING_WELDED"
+	PartStatusComplete        PartStatus = "COMPLETE"
+	PartStatusScrap           PartStatus = "SCRAP"
 )
 
 // PartBuffer represents a buffer between machines
