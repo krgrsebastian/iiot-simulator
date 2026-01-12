@@ -2,142 +2,83 @@ package simulator
 
 import (
 	"time"
+
+	"github.com/sebastiankruger/shopfloor-simulator/internal/core"
+	"github.com/sebastiankruger/shopfloor-simulator/internal/machines/welding"
 )
 
-// MachineState represents the current state of the welding robot
-type MachineState int
+// Re-export MachineState from core for backward compatibility
+type MachineState = core.MachineState
 
+// Machine state constants - re-exported from core
 const (
-	StateIdle MachineState = iota
-	StateSetup
-	StateRunning
-	StatePlannedStop
-	StateUnplannedStop
+	StateIdle          = core.StateIdle
+	StateSetup         = core.StateSetup
+	StateRunning       = core.StateRunning
+	StatePlannedStop   = core.StatePlannedStop
+	StateUnplannedStop = core.StateUnplannedStop
 )
 
-func (s MachineState) String() string {
-	switch s {
-	case StateIdle:
-		return "Idle"
-	case StateSetup:
-		return "Setup"
-	case StateRunning:
-		return "Running"
-	case StatePlannedStop:
-		return "PlannedStop"
-	case StateUnplannedStop:
-		return "UnplannedStop"
-	default:
-		return "Unknown"
-	}
-}
+// WeldPhase - re-exported from welding package
+type WeldPhase = welding.WeldPhase
 
-// WeldPhase represents the phase within a welding cycle
-type WeldPhase int
-
+// Weld phase constants - re-exported from welding
 const (
-	PhaseOff WeldPhase = iota
-	PhaseRampUp
-	PhaseSteady
-	PhaseRampDown
+	PhaseOff      = welding.PhaseOff
+	PhaseRampUp   = welding.PhaseRampUp
+	PhaseSteady   = welding.PhaseSteady
+	PhaseRampDown = welding.PhaseRampDown
 )
 
-// ErrorCode represents different error types
-type ErrorCode string
+// ErrorCode - re-exported from welding package
+type ErrorCode = welding.ErrorCode
 
+// Error code constants - re-exported from welding
 const (
-	ErrorNone           ErrorCode = ""
-	ErrorWireFeedJam    ErrorCode = "E001"
-	ErrorGasFlowFault   ErrorCode = "E002"
-	ErrorArcFault       ErrorCode = "E003"
-	ErrorRobotCollision ErrorCode = "E004"
-	ErrorQualityReject  ErrorCode = "E005"
+	ErrorNone           = welding.ErrorNone
+	ErrorWireFeedJam    = welding.ErrorWireFeedJam
+	ErrorGasFlowFault   = welding.ErrorGasFlowFault
+	ErrorArcFault       = welding.ErrorArcFault
+	ErrorRobotCollision = welding.ErrorRobotCollision
+	ErrorQualityReject  = welding.ErrorQualityReject
 )
 
-// ErrorInfo contains information about the current error
-type ErrorInfo struct {
-	Code        ErrorCode
-	Message     string
-	OccurredAt  time.Time
-	ExpectedEnd time.Time
-}
+// ErrorInfo - re-exported from core
+type ErrorInfo = core.ErrorInfo
 
-// GetErrorInfo returns error details for a given error code
+// GetErrorInfo wraps welding.GetErrorInfo for backward compatibility
 func GetErrorInfo(code ErrorCode) (message string, minDuration, maxDuration time.Duration) {
-	switch code {
-	case ErrorWireFeedJam:
-		return "Wire feed jam detected", 5 * time.Minute, 10 * time.Minute
-	case ErrorGasFlowFault:
-		return "Gas flow fault", 2 * time.Minute, 5 * time.Minute
-	case ErrorArcFault:
-		return "Arc fault detected", 1 * time.Minute, 3 * time.Minute
-	case ErrorRobotCollision:
-		return "Robot collision detected", 15 * time.Minute, 30 * time.Minute
-	case ErrorQualityReject:
-		return "Quality reject", 1 * time.Minute, 2 * time.Minute
-	default:
-		return "", 0, 0
-	}
+	return welding.GetErrorInfo(code)
 }
 
-// ProductionOrder represents a manufacturing order
-type ProductionOrder struct {
-	OrderID             string    `json:"orderId"`
-	PartNumber          string    `json:"partNumber"`
-	PartDescription     string    `json:"partDescription"`
-	Quantity            int       `json:"quantity"`
-	QuantityCompleted   int       `json:"quantityCompleted"`
-	QuantityScrap       int       `json:"quantityScrap"`
-	DueDate             time.Time `json:"dueDate"`
-	Customer            string    `json:"customer"`
-	Priority            int       `json:"priority"`
-	Status              string    `json:"status"`
-	StartedAt           time.Time `json:"startedAt,omitempty"`
-	EstimatedCompletion time.Time `json:"estimatedCompletion,omitempty"`
-}
+// ProductionOrder - re-exported from core
+type ProductionOrder = core.ProductionOrder
 
-// Order status constants
+// Order status constants - re-exported from core
 const (
-	OrderStatusQueued     = "QUEUED"
-	OrderStatusInProgress = "IN_PROGRESS"
-	OrderStatusCompleted  = "COMPLETED"
-	OrderStatusCancelled  = "CANCELLED"
+	OrderStatusQueued     = core.OrderStatusQueued
+	OrderStatusInProgress = core.OrderStatusInProgress
+	OrderStatusCompleted  = core.OrderStatusCompleted
+	OrderStatusCancelled  = core.OrderStatusCancelled
 )
 
-// Shift represents a work shift
-type Shift struct {
-	ShiftID       string        `json:"shiftId"`
-	ShiftName     string        `json:"shiftName"`
-	ShiftNumber   int           `json:"shiftNumber"`
-	StartTime     time.Time     `json:"startTime"`
-	EndTime       time.Time     `json:"endTime"`
-	WorkCenterID  string        `json:"workCenterId"`
-	PlannedBreaks []PlannedBreak `json:"plannedBreaks"`
-	Status        string        `json:"status"`
-}
+// Shift - re-exported from core
+type Shift = core.Shift
 
-// PlannedBreak represents a scheduled break within a shift
-type PlannedBreak struct {
-	Start time.Time `json:"start"`
-	End   time.Time `json:"end"`
-	Type  string    `json:"type"` // "break" or "lunch"
-}
+// PlannedBreak - re-exported from core
+type PlannedBreak = core.PlannedBreak
 
-// Shift status constants
+// Shift status constants - re-exported from core
 const (
-	ShiftStatusActive   = "ACTIVE"
-	ShiftStatusEnded    = "ENDED"
-	ShiftStatusUpcoming = "UPCOMING"
+	ShiftStatusActive   = core.ShiftStatusActive
+	ShiftStatusEnded    = core.ShiftStatusEnded
+	ShiftStatusUpcoming = core.ShiftStatusUpcoming
 )
 
-// PartDefinition defines a part type that can be produced
-type PartDefinition struct {
-	PartNumber  string
-	Description string
-	CycleTime   time.Duration
-}
+// PartDefinition - re-exported from core
+type PartDefinition = core.PartDefinition
 
-// TimeseriesData holds all current timeseries values
+// TimeseriesData holds all current timeseries values (legacy compatibility)
 type TimeseriesData struct {
 	// Welding parameters
 	WeldingCurrent float64
@@ -170,17 +111,43 @@ type TimeseriesData struct {
 	Timestamp time.Time
 }
 
-// SimulatorState holds the complete state of the simulator
+// FromWeldingData converts WeldingData to TimeseriesData for backward compatibility
+func FromWeldingData(wd *welding.WeldingData) *TimeseriesData {
+	return &TimeseriesData{
+		WeldingCurrent:    wd.WeldingCurrent,
+		Voltage:           wd.Voltage,
+		WireFeedSpeed:     wd.WireFeedSpeed,
+		GasFlow:           wd.GasFlow,
+		TravelSpeed:       wd.TravelSpeed,
+		ArcTime:           wd.ArcTime,
+		PositionX:         wd.PositionX,
+		PositionY:         wd.PositionY,
+		PositionZ:         wd.PositionZ,
+		TorchAngle:        wd.TorchAngle,
+		State:             wd.State,
+		GoodParts:         wd.GoodParts,
+		ScrapParts:        wd.ScrapParts,
+		CurrentOrderID:    wd.CurrentOrderID,
+		CurrentPartNumber: wd.CurrentPartNumber,
+		CycleProgress:     wd.CycleProgress,
+		ErrorCode:         wd.ErrorCode,
+		ErrorMessage:      wd.ErrorMessage,
+		ErrorTimestamp:    wd.ErrorTimestamp,
+		Timestamp:         wd.Timestamp,
+	}
+}
+
+// SimulatorState holds the complete state of the simulator (legacy compatibility)
 type SimulatorState struct {
 	// Current state
 	State     MachineState
 	WeldPhase WeldPhase
 
 	// Timing
-	StateEnteredAt    time.Time
-	CycleStartedAt    time.Time
-	PhaseStartedAt    time.Time
-	LastPublishAt     time.Time
+	StateEnteredAt time.Time
+	CycleStartedAt time.Time
+	PhaseStartedAt time.Time
+	LastPublishAt  time.Time
 
 	// Current work
 	CurrentOrder *ProductionOrder
@@ -198,7 +165,7 @@ type SimulatorState struct {
 	OrderQueue []*ProductionOrder
 
 	// Timeseries state (for colored noise)
-	LastCurrent float64
-	LastVoltage float64
+	LastCurrent       float64
+	LastVoltage       float64
 	ColoredNoiseState float64
 }
