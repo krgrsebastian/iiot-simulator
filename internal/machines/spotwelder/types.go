@@ -60,17 +60,17 @@ const (
 func GetErrorInfo(code ErrorCode) (message string, minDuration, maxDuration time.Duration) {
 	switch code {
 	case ErrorWeldFault:
-		return "Weld quality fault detected", 2 * time.Minute, 5 * time.Minute
+		return "Weld quality fault detected", 30 * time.Second, 1 * time.Minute
 	case ErrorClampFault:
-		return "Clamp mechanism fault", 3 * time.Minute, 8 * time.Minute
+		return "Clamp mechanism fault", 45 * time.Second, 2 * time.Minute
 	case ErrorStudMisfeed:
-		return "Stud feed mechanism jam", 2 * time.Minute, 5 * time.Minute
+		return "Stud feed mechanism jam", 30 * time.Second, 1 * time.Minute
 	case ErrorOverheat:
-		return "Electrode overheat protection", 5 * time.Minute, 15 * time.Minute
+		return "Electrode overheat protection", 1 * time.Minute, 3 * time.Minute
 	case ErrorCurrentFault:
-		return "Weld current out of range", 3 * time.Minute, 7 * time.Minute
+		return "Weld current out of range", 45 * time.Second, 90 * time.Second
 	case ErrorQualityReject:
-		return "Weld quality below threshold", 1 * time.Minute, 3 * time.Minute
+		return "Weld quality below threshold", 20 * time.Second, 45 * time.Second
 	default:
 		return "", 0, 0
 	}
@@ -198,9 +198,9 @@ type SpotWelderConfig struct {
 // DefaultSpotWelderConfig returns default spot welder parameters
 func DefaultSpotWelderConfig() SpotWelderConfig {
 	return SpotWelderConfig{
-		// Welding parameters
-		TargetCurrent:  8.0,                      // kA
-		TargetVoltage:  2.5,                      // V
+		// Welding parameters (typical for steel: 6-10 kA, 3-12 V)
+		TargetCurrent:  8.0,                      // kA (typical for steel sheet)
+		TargetVoltage:  6.0,                      // V (typical secondary voltage)
 		WeldDuration:   200 * time.Millisecond,   // 200ms per weld
 		WeldsPerPart:   4,                        // 4 studs per rail
 

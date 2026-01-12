@@ -147,7 +147,7 @@ func (pr *PickerRobot) updateIdle(now time.Time) {
 
 func (pr *PickerRobot) updateSetup(elapsed time.Duration, now time.Time) {
 	// Quick setup - just verify position
-	if elapsed >= pr.Config().SetupTime {
+	if elapsed >= pr.Config().GetEffectiveSetupTime() {
 		pr.TransitionTo(core.StateRunning)
 		pr.CycleStartedAt = now
 		pr.SetPhase(PhaseMoveToPickup)
@@ -175,7 +175,7 @@ func (pr *PickerRobot) updateRunning(now time.Time, isBreakTime bool) {
 
 	// Update picker phase
 	cycleElapsed := pr.ElapsedInCycle()
-	cycleTime := pr.Config().CycleTime
+	cycleTime := pr.Config().GetEffectiveCycleTime()
 
 	// Calculate phase boundaries
 	cfg := pr.pickerConfig
@@ -451,14 +451,15 @@ func (pr *PickerRobot) shouldTriggerError() bool {
 	if pr.pickerState.Phase == PhaseIdle {
 		return false
 	}
-	return pr.noise.ShouldTrigger(pr.Config().ErrorRate, pr.Config().PublishInterval, pr.Config().CycleTime)
+	return pr.noise.ShouldTrigger(pr.Config().GetEffectiveErrorRate(), pr.Config().PublishInterval, pr.Config().GetEffectiveCycleTime())
 }
 
 func (pr *PickerRobot) triggerError(now time.Time) {
 	errors := AllErrorCodes()
 	errorCode := errors[pr.noise.UniformInt(0, len(errors)-1)]
 	message, minDur, maxDur := GetErrorInfo(errorCode)
-	duration := time.Duration(pr.noise.Uniform(float64(minDur), float64(maxDur)))
+	baseDuration := time.Duration(pr.noise.Uniform(float64(minDur), float64(maxDur)))
+	duration := pr.Config().GetEffectiveErrorDuration(baseDuration)
 
 	// If holding a part and error is part dropped, mark as scrap
 	if errorCode == ErrorPartDropped && pr.pickerState.HeldPartID != "" {
@@ -501,7 +502,7 @@ func (pr *PickerRobot) GetCycleProgress() float64 {
 		return 0
 	}
 	elapsed := pr.ElapsedInCycle()
-	progress := float64(elapsed) / float64(pr.Config().CycleTime) * 100
+	progress := float64(elapsed) / float64(pr.Config().GetEffectiveCycleTime()) * 100
 	if progress > 100 {
 		progress = 100
 	}
@@ -571,7 +572,7 @@ func (pr *PickerRobot) GenerateData() map[string]interface{} {
 }
 
 func (pr *PickerRobot) calculatePhaseProgress() float64 {
-	cycleTime := pr.Config().CycleTime
+	cycleTime := pr.Config().GetEffectiveCycleTime()
 	elapsed := pr.ElapsedInCycle()
 	cfg := pr.pickerConfig
 

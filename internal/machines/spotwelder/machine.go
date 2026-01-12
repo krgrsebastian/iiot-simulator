@@ -127,6 +127,9 @@ func (sw *SpotWelder) Update(now time.Time, isBreakTime bool) {
 
 	case core.StateUnplannedStop:
 		sw.updateUnplannedStop(now)
+
+	case core.StateWaiting:
+		sw.updateWaiting(now, isBreakTime)
 	}
 }
 
@@ -149,7 +152,7 @@ func (sw *SpotWelder) updateIdle(now time.Time) {
 
 func (sw *SpotWelder) updateSetup(elapsed time.Duration, now time.Time) {
 	// Setup: electrode check, position calibration
-	if elapsed >= sw.Config().SetupTime {
+	if elapsed >= sw.Config().GetEffectiveSetupTime() {
 		// Get part from input buffer
 		if part := sw.welderState.InputBuffer.Pop(); part != nil {
 			sw.welderState.CurrentPartID = part.ID
@@ -169,12 +172,6 @@ func (sw *SpotWelder) updateSetup(elapsed time.Duration, now time.Time) {
 }
 
 func (sw *SpotWelder) updateRunning(now time.Time, isBreakTime bool) {
-	// Check for break time - only stop if not mid-part
-	if isBreakTime && sw.welderState.Phase == PhaseIdle {
-		sw.TransitionTo(core.StatePlannedStop)
-		return
-	}
-
 	// Check for random error
 	if sw.shouldTriggerError() {
 		sw.triggerError(now)
@@ -183,7 +180,7 @@ func (sw *SpotWelder) updateRunning(now time.Time, isBreakTime bool) {
 
 	// Update spot welder phase
 	cycleElapsed := sw.ElapsedInCycle()
-	cycleTime := sw.Config().CycleTime
+	cycleTime := sw.Config().GetEffectiveCycleTime()
 	cfg := sw.welderConfig
 
 	// Calculate phase boundaries
@@ -277,6 +274,29 @@ func (sw *SpotWelder) updateUnplannedStop(now time.Time) {
 	}
 }
 
+func (sw *SpotWelder) updateWaiting(now time.Time, isBreakTime bool) {
+	// Check for break time
+	if isBreakTime {
+		sw.TransitionTo(core.StatePlannedStop)
+		return
+	}
+
+	// Check if parts are available
+	if sw.welderState.InputBuffer.Count() > 0 {
+		// Start next part without going through Setup
+		sw.TransitionTo(core.StateRunning)
+		sw.CycleStartedAt = now
+		if part := sw.welderState.InputBuffer.Pop(); part != nil {
+			sw.welderState.CurrentPartID = part.ID
+			sw.welderState.CurrentPart = part
+			part.Status = core.PartStatusBeingWelded
+			part.Location = sw.name
+			sw.SetPhase(PhaseLoad)
+			sw.welderState.WeldsInCurrentPart = 0
+		}
+	}
+}
+
 func (sw *SpotWelder) shouldTriggerError() bool {
 	// Only trigger errors during weld phase
 	if sw.welderState.Phase != PhaseWeld {
@@ -284,12 +304,12 @@ func (sw *SpotWelder) shouldTriggerError() bool {
 	}
 
 	// Higher error rate if electrode is worn
-	errorRate := sw.Config().ErrorRate
+	errorRate := sw.Config().GetEffectiveErrorRate()
 	if sw.GetElectrodeWear() > 80 {
 		errorRate *= 3 // Triple error rate when electrode worn
 	}
 
-	return sw.noise.ShouldTrigger(errorRate, sw.Config().PublishInterval, sw.Config().CycleTime)
+	return sw.noise.ShouldTrigger(errorRate, sw.Config().PublishInterval, sw.Config().GetEffectiveCycleTime())
 }
 
 func (sw *SpotWelder) triggerError(now time.Time) {
@@ -302,7 +322,8 @@ func (sw *SpotWelder) triggerError(now time.Time) {
 	}
 
 	message, minDur, maxDur := GetErrorInfo(errorCode)
-	duration := time.Duration(sw.noise.Uniform(float64(minDur), float64(maxDur)))
+	baseDuration := time.Duration(sw.noise.Uniform(float64(minDur), float64(maxDur)))
+	duration := sw.Config().GetEffectiveErrorDuration(baseDuration)
 
 	// Quality reject means scrap the current part
 	if errorCode == ErrorQualityReject && sw.welderState.CurrentPartID != "" {
@@ -331,7 +352,7 @@ func (sw *SpotWelder) completeCycle(now time.Time) {
 	}
 
 	// Determine if part is good or scrap
-	isScrap := sw.noise.Bool(sw.Config().ScrapRate)
+	isScrap := sw.noise.Bool(sw.Config().GetEffectiveScrapRate())
 	if isScrap {
 		sw.ScrapParts++
 		if sw.welderState.CurrentPart != nil {
@@ -362,9 +383,9 @@ func (sw *SpotWelder) completeCycle(now time.Time) {
 			sw.SetPhase(PhaseLoad)
 		}
 	} else {
-		// Return to idle
-		sw.TransitionTo(core.StateIdle)
-		sw.welderState.Phase = PhaseIdle
+		// No parts available - transition to Waiting state
+		sw.TransitionTo(core.StateWaiting)
+		sw.SetPhase(PhaseIdle)
 	}
 }
 
@@ -374,7 +395,7 @@ func (sw *SpotWelder) GetCycleProgress() float64 {
 		return 0
 	}
 	elapsed := sw.ElapsedInCycle()
-	progress := float64(elapsed) / float64(sw.Config().CycleTime) * 100
+	progress := float64(elapsed) / float64(sw.Config().GetEffectiveCycleTime()) * 100
 	if progress > 100 {
 		progress = 100
 	}
@@ -396,7 +417,7 @@ func (sw *SpotWelder) GetOPCUANodes() []core.NodeDefinition {
 		{Name: "TotalWelds", DisplayName: "Total Welds", Description: "Total welds performed", DataType: core.DataTypeInt32, Unit: "", InitialValue: int32(0)},
 		{Name: "CycleCount", DisplayName: "Cycle Count", Description: "Parts completed", DataType: core.DataTypeInt32, Unit: "", InitialValue: int32(0)},
 		{Name: "CycleTime", DisplayName: "Cycle Time", Description: "Current cycle time", DataType: core.DataTypeDouble, Unit: "s", InitialValue: 0.0},
-		{Name: "State", DisplayName: "State", Description: "Machine state (0-4)", DataType: core.DataTypeInt32, Unit: "", InitialValue: int32(0)},
+		{Name: "State", DisplayName: "State", Description: "Machine state (0-5)", DataType: core.DataTypeInt32, Unit: "", InitialValue: int32(0)},
 		{Name: "GoodParts", DisplayName: "Good Parts", Description: "Good parts count", DataType: core.DataTypeInt32, Unit: "", InitialValue: int32(0)},
 		{Name: "ScrapParts", DisplayName: "Scrap Parts", Description: "Scrap parts count", DataType: core.DataTypeInt32, Unit: "", InitialValue: int32(0)},
 		{Name: "CurrentOrderId", DisplayName: "Current Order ID", Description: "Active order ID", DataType: core.DataTypeString, Unit: "", InitialValue: ""},
@@ -445,7 +466,7 @@ func (sw *SpotWelder) GenerateData() map[string]interface{} {
 }
 
 func (sw *SpotWelder) calculatePhaseProgress() float64 {
-	cycleTime := sw.Config().CycleTime
+	cycleTime := sw.Config().GetEffectiveCycleTime()
 	elapsed := sw.ElapsedInCycle()
 	cfg := sw.welderConfig
 

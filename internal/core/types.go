@@ -13,6 +13,7 @@ const (
 	StateRunning
 	StatePlannedStop
 	StateUnplannedStop
+	StateWaiting // Waiting for parts/input (machine is ready but no work available)
 )
 
 func (s MachineState) String() string {
@@ -27,6 +28,8 @@ func (s MachineState) String() string {
 		return "PlannedStop"
 	case StateUnplannedStop:
 		return "UnplannedStop"
+	case StateWaiting:
+		return "Waiting"
 	default:
 		return "Unknown"
 	}

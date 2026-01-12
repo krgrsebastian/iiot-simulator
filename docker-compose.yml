@@ -16,7 +16,7 @@ services:
       - HEALTH_PORT=8081
       - ERP_ENDPOINT=http://host.docker.internal:9000
       - CYCLE_TIME=60s
-      - SETUP_TIME=45s
+      - SETUP_TIME=60s
       - SCRAP_RATE=0.03
       - ERROR_RATE=0.02
       - ORDER_MIN_QTY=50

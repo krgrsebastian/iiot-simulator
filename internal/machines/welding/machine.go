@@ -121,7 +121,7 @@ func (wr *WeldingRobot) updateIdle(now time.Time) {
 
 func (wr *WeldingRobot) updateSetup(elapsed time.Duration, now time.Time) {
 	// Setup complete after configured time
-	if elapsed >= wr.Config().SetupTime {
+	if elapsed >= wr.Config().GetEffectiveSetupTime() {
 		wr.TransitionTo(core.StateRunning)
 		wr.CycleStartedAt = now
 		wr.SetWeldPhase(PhaseRampUp)
@@ -144,7 +144,7 @@ func (wr *WeldingRobot) updateRunning(now time.Time, isBreakTime bool) {
 
 	// Update weld phase and check cycle completion
 	cycleElapsed := wr.ElapsedInCycle()
-	cycleTime := wr.Config().CycleTime
+	cycleTime := wr.Config().GetEffectiveCycleTime()
 
 	// Calculate phase timing
 	rampUpDuration := time.Duration(float64(cycleTime) * 0.05)   // 5% of cycle
@@ -192,7 +192,7 @@ func (wr *WeldingRobot) shouldTriggerError() bool {
 	if wr.weldState.WeldPhase != PhaseSteady {
 		return false
 	}
-	return wr.noise.ShouldTrigger(wr.Config().ErrorRate, wr.Config().PublishInterval, wr.Config().CycleTime)
+	return wr.noise.ShouldTrigger(wr.Config().GetEffectiveErrorRate(), wr.Config().PublishInterval, wr.Config().GetEffectiveCycleTime())
 }
 
 func (wr *WeldingRobot) triggerError(now time.Time) {
@@ -210,7 +210,7 @@ func (wr *WeldingRobot) triggerError(now time.Time) {
 
 func (wr *WeldingRobot) completeCycle(now time.Time) {
 	// Determine if part is scrap
-	isScrap := wr.noise.Bool(wr.Config().ScrapRate)
+	isScrap := wr.noise.Bool(wr.Config().GetEffectiveScrapRate())
 
 	wr.CompleteCycle(isScrap)
 
@@ -233,7 +233,7 @@ func (wr *WeldingRobot) GetCycleProgress() float64 {
 		return 0
 	}
 	elapsed := wr.ElapsedInCycle()
-	progress := float64(elapsed) / float64(wr.Config().CycleTime) * 100
+	progress := float64(elapsed) / float64(wr.Config().GetEffectiveCycleTime()) * 100
 	if progress > 100 {
 		progress = 100
 	}
@@ -293,7 +293,7 @@ func (wr *WeldingRobot) GenerateData() map[string]interface{} {
 }
 
 func (wr *WeldingRobot) calculatePhaseProgress() float64 {
-	cycleTime := wr.Config().CycleTime
+	cycleTime := wr.Config().GetEffectiveCycleTime()
 	rampUpDuration := time.Duration(float64(cycleTime) * 0.05)
 	steadyDuration := time.Duration(float64(cycleTime) * 0.90)
 	rampDownDuration := time.Duration(float64(cycleTime) * 0.05)

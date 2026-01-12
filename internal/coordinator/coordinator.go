@@ -90,14 +90,8 @@ func (c *ProductionLineCoordinator) SetMachines(
 		picker.SetInputBuffer(forming.GetOutputBuffer())
 	}
 
-	// Picker output → Welder input
-	if welder != nil && picker != nil {
-		// Create a buffer for picker output that welder will read from
-		pickerOutputBuffer := core.NewPartBuffer(c.config.WelderBufferCapacity)
-		picker.SetOutputBuffer(pickerOutputBuffer)
-		// Note: SpotWelder has its own input buffer, we need to sync these
-		// For now, we'll handle this in the Update loop
-	}
+	// Picker output → Welder input connection is handled by runner.go
+	// which calls: picker.SetOutputBuffer(welder.GetInputBuffer())
 }
 
 // Start starts the production line

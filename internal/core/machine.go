@@ -3,6 +3,8 @@ package core
 import (
 	"context"
 	"time"
+
+	"github.com/sebastiankruger/shopfloor-simulator/internal/config"
 )
 
 // MachineSimulator defines the interface that all machine types must implement
@@ -66,6 +68,48 @@ type MachineConfig struct {
 	ScrapRate       float64
 	ErrorRate       float64
 	PublishInterval time.Duration
+	Runtime         *config.RuntimeConfig // Runtime-adjustable config (optional)
+}
+
+// GetEffectiveCycleTime returns the cycle time, using runtime config if available.
+func (mc MachineConfig) GetEffectiveCycleTime() time.Duration {
+	if mc.Runtime != nil {
+		return mc.Runtime.GetEffectiveCycleTime()
+	}
+	return mc.CycleTime
+}
+
+// GetEffectiveSetupTime returns the setup time, using runtime config if available.
+func (mc MachineConfig) GetEffectiveSetupTime() time.Duration {
+	if mc.Runtime != nil {
+		return mc.Runtime.GetEffectiveSetupTime()
+	}
+	return mc.SetupTime
+}
+
+// GetEffectiveScrapRate returns the scrap rate, using runtime config if available.
+func (mc MachineConfig) GetEffectiveScrapRate() float64 {
+	if mc.Runtime != nil {
+		return mc.Runtime.GetScrapRate()
+	}
+	return mc.ScrapRate
+}
+
+// GetEffectiveErrorRate returns the error rate, using runtime config if available.
+func (mc MachineConfig) GetEffectiveErrorRate() float64 {
+	if mc.Runtime != nil {
+		return mc.Runtime.GetErrorRate()
+	}
+	return mc.ErrorRate
+}
+
+// GetEffectiveErrorDuration scales an error duration by the cycle time scale.
+// Higher scale = faster simulation = shorter error duration.
+func (mc MachineConfig) GetEffectiveErrorDuration(baseDuration time.Duration) time.Duration {
+	if mc.Runtime != nil {
+		return mc.Runtime.GetEffectiveErrorDuration(baseDuration)
+	}
+	return baseDuration
 }
 
 // Callbacks for machine events

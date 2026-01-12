@@ -50,7 +50,7 @@ func Load() (*Config, error) {
 		// Timing settings
 		PublishInterval: getDurationOrDefault("PUBLISH_INTERVAL", 1*time.Second),
 		CycleTime:       getDurationOrDefault("CYCLE_TIME", 60*time.Second),
-		SetupTime:       getDurationOrDefault("SETUP_TIME", 45*time.Second),
+		SetupTime:       getDurationOrDefault("SETUP_TIME", 60*time.Second),
 
 		// Production settings
 		ScrapRate:   getEnvAsFloatOrDefault("SCRAP_RATE", 0.03),

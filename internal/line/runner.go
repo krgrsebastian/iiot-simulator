@@ -15,7 +15,8 @@ import (
 
 // ProductionLineRunner manages a complete production line
 type ProductionLineRunner struct {
-	config config.Config
+	config        config.Config
+	runtimeConfig *config.RuntimeConfig
 
 	// Machines
 	formingMachine *forming.FormingMachine
@@ -31,17 +32,22 @@ type ProductionLineRunner struct {
 
 // NewProductionLineRunner creates a new production line runner
 func NewProductionLineRunner(cfg config.Config) (*ProductionLineRunner, error) {
+	// Create runtime config for dynamic parameter adjustment
+	runtimeCfg := config.NewRuntimeConfig(&cfg)
+
 	plr := &ProductionLineRunner{
-		config: cfg,
+		config:        cfg,
+		runtimeConfig: runtimeCfg,
 	}
 
-	// Create machine configurations
+	// Create machine configurations with runtime config
 	baseMachineConfig := core.MachineConfig{
 		CycleTime:       cfg.CycleTime,
 		SetupTime:       cfg.SetupTime,
 		ErrorRate:       cfg.ErrorRate,
 		ScrapRate:       cfg.ScrapRate,
 		PublishInterval: cfg.PublishInterval,
+		Runtime:         runtimeCfg,
 	}
 
 	// Create forming machine (ns=2)
@@ -55,6 +61,7 @@ func NewProductionLineRunner(cfg config.Config) (*ProductionLineRunner, error) {
 	// Create picker robot (ns=3) with faster cycle time
 	pickerMachineConfig := baseMachineConfig
 	pickerMachineConfig.CycleTime = cfg.CycleTime / 3 // Picker is faster
+	// Note: Runtime is already set from baseMachineConfig
 	pickerConfig := picker.DefaultPickerConfig()
 	plr.pickerRobot = picker.NewPickerRobot(
 		"PickerRobot",
@@ -189,4 +196,9 @@ func (plr *ProductionLineRunner) GetSpotWelder() *spotwelder.SpotWelder {
 // GetLineState returns the current line state
 func (plr *ProductionLineRunner) GetLineState() coordinator.LineState {
 	return plr.coordinator.GetLineState()
+}
+
+// GetRuntimeConfig returns the runtime configuration for dynamic adjustments
+func (plr *ProductionLineRunner) GetRuntimeConfig() *config.RuntimeConfig {
+	return plr.runtimeConfig
 }

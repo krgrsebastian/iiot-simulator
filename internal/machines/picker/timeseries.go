@@ -51,8 +51,8 @@ func (tg *TimeseriesGenerator) Generate(state core.MachineState, phase PickerPha
 		data.Speed = distance / dt
 	}
 
-	// Add noise to speed
-	data.Speed = tg.noise.GaussianNoise(data.Speed, 3.0)
+	// Add noise to speed (5% variation)
+	data.Speed = tg.noise.GaussianNoise(data.Speed, 0.05)
 	if data.Speed < 0 {
 		data.Speed = 0
 	}
@@ -127,8 +127,8 @@ func (tg *TimeseriesGenerator) generateGripForce(data *PickerData, gripper Gripp
 		}
 
 	case GripperClosed:
-		// Full grip force on part
-		data.GripForce = tg.noise.ColoredNoise("gripForce", tg.config.MaxGripForce*0.7, 5.0, 0.6)
+		// Full grip force on part (5% noise)
+		data.GripForce = tg.noise.ColoredNoise("gripForce", tg.config.MaxGripForce*0.7, 0.05, 0.6)
 
 	case GripperOpening:
 		// Force decreases as gripper opens

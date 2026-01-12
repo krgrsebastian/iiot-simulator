@@ -62,8 +62,8 @@ func (sm *ShiftManager) initializeSchedules() {
 				Start: 6,
 				End:   14,
 				Breaks: []BreakDefinition{
-					{StartHour: 9, StartMinute: 0, EndHour: 9, EndMinute: 15, Type: "break"},
-					{StartHour: 12, StartMinute: 0, EndHour: 12, EndMinute: 30, Type: "lunch"},
+					{StartHour: 9, StartMinute: 0, EndHour: 9, EndMinute: 1, Type: "break"},
+					{StartHour: 12, StartMinute: 0, EndHour: 12, EndMinute: 1, Type: "lunch"},
 				},
 			},
 			{
@@ -71,8 +71,8 @@ func (sm *ShiftManager) initializeSchedules() {
 				Start: 14,
 				End:   22,
 				Breaks: []BreakDefinition{
-					{StartHour: 17, StartMinute: 0, EndHour: 17, EndMinute: 15, Type: "break"},
-					{StartHour: 19, StartMinute: 0, EndHour: 19, EndMinute: 30, Type: "lunch"},
+					{StartHour: 17, StartMinute: 0, EndHour: 17, EndMinute: 1, Type: "break"},
+					{StartHour: 19, StartMinute: 0, EndHour: 19, EndMinute: 1, Type: "lunch"},
 				},
 			},
 			{
@@ -80,8 +80,8 @@ func (sm *ShiftManager) initializeSchedules() {
 				Start: 22,
 				End:   6, // Next day
 				Breaks: []BreakDefinition{
-					{StartHour: 1, StartMinute: 0, EndHour: 1, EndMinute: 15, Type: "break"},
-					{StartHour: 3, StartMinute: 0, EndHour: 3, EndMinute: 30, Type: "lunch"},
+					{StartHour: 1, StartMinute: 0, EndHour: 1, EndMinute: 1, Type: "break"},
+					{StartHour: 3, StartMinute: 0, EndHour: 3, EndMinute: 1, Type: "lunch"},
 				},
 			},
 		}
@@ -93,8 +93,8 @@ func (sm *ShiftManager) initializeSchedules() {
 				Start: 6,
 				End:   14,
 				Breaks: []BreakDefinition{
-					{StartHour: 9, StartMinute: 0, EndHour: 9, EndMinute: 15, Type: "break"},
-					{StartHour: 12, StartMinute: 0, EndHour: 12, EndMinute: 30, Type: "lunch"},
+					{StartHour: 9, StartMinute: 0, EndHour: 9, EndMinute: 1, Type: "break"},
+					{StartHour: 12, StartMinute: 0, EndHour: 12, EndMinute: 1, Type: "lunch"},
 				},
 			},
 			{
@@ -102,8 +102,8 @@ func (sm *ShiftManager) initializeSchedules() {
 				Start: 14,
 				End:   22,
 				Breaks: []BreakDefinition{
-					{StartHour: 17, StartMinute: 0, EndHour: 17, EndMinute: 15, Type: "break"},
-					{StartHour: 19, StartMinute: 0, EndHour: 19, EndMinute: 30, Type: "lunch"},
+					{StartHour: 17, StartMinute: 0, EndHour: 17, EndMinute: 1, Type: "break"},
+					{StartHour: 19, StartMinute: 0, EndHour: 19, EndMinute: 1, Type: "lunch"},
 				},
 			},
 		}
@@ -115,9 +115,9 @@ func (sm *ShiftManager) initializeSchedules() {
 				Start: 8,
 				End:   17,
 				Breaks: []BreakDefinition{
-					{StartHour: 10, StartMinute: 0, EndHour: 10, EndMinute: 15, Type: "break"},
-					{StartHour: 12, StartMinute: 30, EndHour: 13, EndMinute: 0, Type: "lunch"},
-					{StartHour: 15, StartMinute: 0, EndHour: 15, EndMinute: 15, Type: "break"},
+					{StartHour: 10, StartMinute: 0, EndHour: 10, EndMinute: 1, Type: "break"},
+					{StartHour: 12, StartMinute: 30, EndHour: 12, EndMinute: 31, Type: "lunch"},
+					{StartHour: 15, StartMinute: 0, EndHour: 15, EndMinute: 1, Type: "break"},
 				},
 			},
 		}

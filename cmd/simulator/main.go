@@ -12,6 +12,7 @@ import (
 	"github.com/rs/zerolog"
 	"github.com/rs/zerolog/log"
 
+	"github.com/sebastiankruger/shopfloor-simulator/internal/api"
 	"github.com/sebastiankruger/shopfloor-simulator/internal/config"
 	"github.com/sebastiankruger/shopfloor-simulator/internal/erp"
 	"github.com/sebastiankruger/shopfloor-simulator/internal/health"
@@ -144,11 +145,18 @@ func main() {
 	}
 	healthHandler.SetOPCUAReady(true)
 
-	// Start health check HTTP server
+	// Start HTTP server (health check + web UI)
 	mux := http.NewServeMux()
 	mux.HandleFunc("/health", healthHandler.HandleHealth)
 	mux.HandleFunc("/health/live", healthHandler.HandleLive)
 	mux.HandleFunc("/health/ready", healthHandler.HandleReady)
+
+	// Register API routes for web UI
+	apiHandler := api.NewStandaloneHandler(cfg.SimulatorName, stateMachine, tsGenerator)
+	mux.HandleFunc("/api/status", apiHandler.HandleStatus)
+	mux.HandleFunc("/api/machines", apiHandler.HandleMachines)
+	mux.HandleFunc("/api/machines/", apiHandler.HandleMachineDetail)
+	mux.Handle("/", api.GetUIFileServer())
 
 	healthServer := &http.Server{
 		Addr:         fmt.Sprintf(":%d", cfg.HealthPort),
@@ -158,9 +166,9 @@ func main() {
 	}
 
 	go func() {
-		log.Info().Int("port", cfg.HealthPort).Msg("Starting health check server")
+		log.Info().Int("port", cfg.HealthPort).Msg("Starting HTTP server (health + web UI)")
 		if err := healthServer.ListenAndServe(); err != nil && err != http.ErrServerClosed {
-			log.Error().Err(err).Msg("Health server error")
+			log.Error().Err(err).Msg("HTTP server error")
 		}
 	}()
 
@@ -321,11 +329,19 @@ func runProductionLine(lineType string) {
 	healthHandler := health.NewHandler()
 	healthHandler.SetOPCUAReady(true)
 
-	// Start health check HTTP server
+	// Start HTTP server (health check + web UI)
 	mux := http.NewServeMux()
 	mux.HandleFunc("/health", healthHandler.HandleHealth)
 	mux.HandleFunc("/health/live", healthHandler.HandleLive)
 	mux.HandleFunc("/health/ready", healthHandler.HandleReady)
+
+	// Register API routes for web UI
+	apiHandler := api.NewProductionLineHandler(cfg.SimulatorName, runner)
+	mux.HandleFunc("/api/status", apiHandler.HandleStatus)
+	mux.HandleFunc("/api/machines", apiHandler.HandleMachines)
+	mux.HandleFunc("/api/machines/", apiHandler.HandleMachineDetail)
+	mux.HandleFunc("/api/config", apiHandler.HandleConfig)
+	mux.Handle("/", api.GetUIFileServer())
 
 	healthServer := &http.Server{
 		Addr:         fmt.Sprintf(":%d", cfg.HealthPort),
@@ -335,9 +351,9 @@ func runProductionLine(lineType string) {
 	}
 
 	go func() {
-		log.Info().Int("port", cfg.HealthPort).Msg("Starting health check server")
+		log.Info().Int("port", cfg.HealthPort).Msg("Starting HTTP server (health + web UI)")
 		if err := healthServer.ListenAndServe(); err != nil && err != http.ErrServerClosed {
-			log.Error().Err(err).Msg("Health server error")
+			log.Error().Err(err).Msg("HTTP server error")
 		}
 	}()
 

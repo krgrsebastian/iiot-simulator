@@ -88,17 +88,17 @@ const (
 func GetErrorInfo(code ErrorCode) (message string, minDuration, maxDuration time.Duration) {
 	switch code {
 	case ErrorGripperFault:
-		return "Gripper mechanism fault", 2 * time.Minute, 5 * time.Minute
+		return "Gripper mechanism fault", 30 * time.Second, 1 * time.Minute
 	case ErrorCollision:
-		return "Collision detected", 5 * time.Minute, 15 * time.Minute
+		return "Collision detected", 1 * time.Minute, 3 * time.Minute
 	case ErrorPositionFault:
-		return "Position feedback error", 3 * time.Minute, 8 * time.Minute
+		return "Position feedback error", 45 * time.Second, 2 * time.Minute
 	case ErrorPartDropped:
-		return "Part dropped during transfer", 2 * time.Minute, 5 * time.Minute
+		return "Part dropped during transfer", 30 * time.Second, 1 * time.Minute
 	case ErrorServoOverload:
-		return "Servo motor overload", 5 * time.Minute, 10 * time.Minute
+		return "Servo motor overload", 1 * time.Minute, 2 * time.Minute
 	case ErrorEmergencyStop:
-		return "Emergency stop activated", 1 * time.Minute, 3 * time.Minute
+		return "Emergency stop activated", 20 * time.Second, 1 * time.Minute
 	default:
 		return "", 0, 0
 	}

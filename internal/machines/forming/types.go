@@ -54,17 +54,17 @@ const (
 func GetErrorInfo(code ErrorCode) (message string, minDuration, maxDuration time.Duration) {
 	switch code {
 	case ErrorSheetMisfeed:
-		return "Sheet metal misfeed detected", 2 * time.Minute, 5 * time.Minute
+		return "Sheet metal misfeed detected", 30 * time.Second, 1 * time.Minute
 	case ErrorHydraulicFault:
-		return "Hydraulic system fault", 5 * time.Minute, 15 * time.Minute
+		return "Hydraulic system fault", 1 * time.Minute, 3 * time.Minute
 	case ErrorOverpressure:
-		return "Overpressure detected", 3 * time.Minute, 8 * time.Minute
+		return "Overpressure detected", 45 * time.Second, 2 * time.Minute
 	case ErrorRamStuck:
-		return "Ram stuck in position", 10 * time.Minute, 30 * time.Minute
+		return "Ram stuck in position", 2 * time.Minute, 5 * time.Minute
 	case ErrorQualityReject:
-		return "Quality reject - forming defect", 1 * time.Minute, 2 * time.Minute
+		return "Quality reject - forming defect", 15 * time.Second, 45 * time.Second
 	case ErrorTemperatureFault:
-		return "Temperature out of range", 5 * time.Minute, 10 * time.Minute
+		return "Temperature out of range", 1 * time.Minute, 2 * time.Minute
 	default:
 		return "", 0, 0
 	}

@@ -138,7 +138,7 @@ func (fm *FormingMachine) updateIdle(now time.Time) {
 
 func (fm *FormingMachine) updateSetup(elapsed time.Duration, now time.Time) {
 	// Setup: heating dies, calibration, etc.
-	if elapsed >= fm.Config().SetupTime {
+	if elapsed >= fm.Config().GetEffectiveSetupTime() {
 		fm.TransitionTo(core.StateRunning)
 		fm.CycleStartedAt = now
 		fm.SetPhase(PhaseLoad)
@@ -168,7 +168,7 @@ func (fm *FormingMachine) updateRunning(now time.Time, isBreakTime bool) {
 
 	// Update forming phase
 	cycleElapsed := fm.ElapsedInCycle()
-	cycleTime := fm.Config().CycleTime
+	cycleTime := fm.Config().GetEffectiveCycleTime()
 
 	// Calculate phase boundaries
 	loadEnd := time.Duration(float64(cycleTime) * fm.formConfig.LoadFraction)
@@ -235,14 +235,15 @@ func (fm *FormingMachine) shouldTriggerError() bool {
 	if fm.formState.Phase != PhaseForm && fm.formState.Phase != PhaseHold {
 		return false
 	}
-	return fm.noise.ShouldTrigger(fm.Config().ErrorRate, fm.Config().PublishInterval, fm.Config().CycleTime)
+	return fm.noise.ShouldTrigger(fm.Config().GetEffectiveErrorRate(), fm.Config().PublishInterval, fm.Config().GetEffectiveCycleTime())
 }
 
 func (fm *FormingMachine) triggerError(now time.Time) {
 	errors := AllErrorCodes()
 	errorCode := errors[fm.noise.UniformInt(0, len(errors)-1)]
 	message, minDur, maxDur := GetErrorInfo(errorCode)
-	duration := time.Duration(fm.noise.Uniform(float64(minDur), float64(maxDur)))
+	baseDuration := time.Duration(fm.noise.Uniform(float64(minDur), float64(maxDur)))
+	duration := fm.Config().GetEffectiveErrorDuration(baseDuration)
 
 	fm.TriggerError(string(errorCode), message, duration)
 	fm.formState.Phase = PhaseIdle
@@ -257,7 +258,7 @@ func (fm *FormingMachine) generatePartID(now time.Time) {
 
 func (fm *FormingMachine) ejectPart(now time.Time) {
 	// Determine if part is scrap
-	isScrap := fm.noise.Bool(fm.Config().ScrapRate)
+	isScrap := fm.noise.Bool(fm.Config().GetEffectiveScrapRate())
 
 	if isScrap {
 		fm.ScrapParts++
@@ -320,7 +321,7 @@ func (fm *FormingMachine) GetCycleProgress() float64 {
 		return 0
 	}
 	elapsed := fm.ElapsedInCycle()
-	progress := float64(elapsed) / float64(fm.Config().CycleTime) * 100
+	progress := float64(elapsed) / float64(fm.Config().GetEffectiveCycleTime()) * 100
 	if progress > 100 {
 		progress = 100
 	}
@@ -384,7 +385,7 @@ func (fm *FormingMachine) GenerateData() map[string]interface{} {
 }
 
 func (fm *FormingMachine) calculatePhaseProgress() float64 {
-	cycleTime := fm.Config().CycleTime
+	cycleTime := fm.Config().GetEffectiveCycleTime()
 	elapsed := fm.ElapsedInCycle()
 
 	loadEnd := time.Duration(float64(cycleTime) * fm.formConfig.LoadFraction)
