@@ -125,15 +125,7 @@ func (plr *ProductionLineRunner) SetupOPCUA(port int, name string) error {
 		return err
 	}
 
-	// Register namespace for Production Line (ns=5)
-	if err := plr.opcuaServer.RegisterNamespace(
-		core.NamespaceLine,
-		"ProductionLine",
-		"Production line coordinator",
-		plr.coordinator.GetOPCUANodes(),
-	); err != nil {
-		return err
-	}
+	// Note: ns=5 (ProductionLine) removed - KPIs calculated externally
 
 	return nil
 }
@@ -163,11 +155,10 @@ func (plr *ProductionLineRunner) Update(now time.Time, isBreakTime bool) {
 	// Update coordinator (which updates all machines)
 	plr.coordinator.Update(now, isBreakTime)
 
-	// Update OPC UA values for each namespace
+	// Update OPC UA values for each namespace (ns=2, ns=3, ns=4 only)
 	plr.opcuaServer.UpdateNamespaceValues(core.NamespaceForming, plr.formingMachine.GenerateData())
 	plr.opcuaServer.UpdateNamespaceValues(core.NamespacePicker, plr.pickerRobot.GenerateData())
 	plr.opcuaServer.UpdateNamespaceValues(core.NamespaceSpotWelder, plr.spotWelder.GenerateData())
-	plr.opcuaServer.UpdateNamespaceValues(core.NamespaceLine, plr.coordinator.GenerateData())
 }
 
 // AddOrder adds an order to the production line

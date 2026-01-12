@@ -1,15 +1,29 @@
-# Welding Robot Shopfloor Simulator
+# Shopfloor Simulator
 
-A realistic shopfloor simulator that generates production data for a simulated welding robot. Designed for demos, training, and testing manufacturing data pipelines.
+A realistic shopfloor simulator that generates production data for manufacturing equipment. Supports both standalone machine mode and multi-machine production line mode. Designed for demos, training, and testing manufacturing data pipelines.
 
 ## Features
 
-- **OPC UA Server**: Exposes timeseries data (current, voltage, wire feed, position, etc.)
+- **OPC UA Server**: Exposes timeseries data via industry-standard protocol
 - **REST API Client**: Sends production orders and shift data to an ERP endpoint
 - **Realistic Data**: Gaussian noise, parameter correlations, ramp-up/ramp-down phases
 - **State Machine**: Idle → Setup → Running → Planned/Unplanned Stop
 - **3-Shift Support**: 24/7 operation with configurable breaks
 - **Auto-generated Orders**: Continuous production simulation
+
+## Simulation Modes
+
+### Mode 1: Standalone Welding Robot (Default)
+Single welding robot simulator with welding-specific parameters.
+
+### Mode 2: Production Line (Multi-Machine)
+Connected production line with 3 machines and part flow:
+- **Forming Machine** (ns=2): Sheet metal forming press
+- **Picker Robot** (ns=3): 6-axis pick and place robot
+- **Spot Welder** (ns=4): Stud spot welding machine
+- **Line Coordinator** (ns=5): OEE metrics and bottleneck detection
+
+See [Production Line Documentation](docs/PRODUCTION_LINE.md) for detailed information.
 
 ## Quick Start
 
@@ -64,6 +78,46 @@ docker-compose up -d
 docker-compose logs -f
 ```
 
+### Production Line Mode
+
+To run the multi-machine production line simulator:
+
+```bash
+docker run -d \
+  --name production-line \
+  -p 4840:4840 \
+  -p 8081:8081 \
+  -e LINE_TYPE=forming-picker-spotwelder \
+  -e SIMULATOR_NAME=ProductionLine-01 \
+  -e CYCLE_TIME=15s \
+  shopfloor-simulator:latest
+```
+
+Or with docker-compose:
+
+```yaml
+services:
+  production-line:
+    image: shopfloor-simulator:latest
+    container_name: production-line-simulator
+    ports:
+      - "4840:4840"   # OPC UA (4 namespaces)
+      - "8081:8081"   # Health check
+    environment:
+      - LINE_TYPE=forming-picker-spotwelder
+      - SIMULATOR_NAME=ProductionLine-01
+      - CYCLE_TIME=15s
+      - SETUP_TIME=5s
+      - SCRAP_RATE=0.03
+      - ERROR_RATE=0.02
+    healthcheck:
+      test: ["CMD", "wget", "--spider", "http://localhost:8081/health"]
+      interval: 10s
+      timeout: 5s
+      retries: 3
+    restart: unless-stopped
+```
+
 ### Building from Source
 
 ```bash
@@ -96,7 +150,8 @@ All configuration is done via environment variables:
 
 | Variable | Default | Description |
 |----------|---------|-------------|
-| `SIMULATOR_NAME` | `WeldingRobot-01` | Robot identifier |
+| `LINE_TYPE` | (empty) | Set to any value to enable production line mode |
+| `SIMULATOR_NAME` | `WeldingRobot-01` | Machine/line identifier |
 | `OPCUA_PORT` | `4840` | OPC UA server port |
 | `HEALTH_PORT` | `8081` | Health check HTTP port |
 | `ERP_ENDPOINT` | `http://localhost:8080` | ERP REST API base URL |
@@ -106,6 +161,8 @@ All configuration is done via environment variables:
 | `ERROR_RATE` | `0.02` | Error probability per cycle |
 | `TIMEZONE` | `Europe/Berlin` | Timezone for shift schedule |
 | `SHIFT_MODEL` | `3-shift` | Shift model (3-shift, 2-shift, 1-shift) |
+
+For production line mode configuration details, see [docs/PRODUCTION_LINE.md](docs/PRODUCTION_LINE.md).
 
 ## OPC UA Nodes
 
@@ -144,6 +201,16 @@ Connect to `opc.tcp://localhost:4840` and browse the following nodes:
 | `ns=2;s=Robot.ErrorCode` | Current error code |
 | `ns=2;s=Robot.ErrorMessage` | Error description |
 | `ns=2;s=Robot.ErrorTimestamp` | When error occurred |
+
+### Production Line Nodes
+
+In production line mode, additional namespaces are available:
+- `ns=2` - Forming Machine (Temperature, Pressure, FormingForce, RamPosition, etc.)
+- `ns=3` - Picker Robot (PositionX/Y/Z, GripperState, PartInGripper, etc.)
+- `ns=4` - Spot Welder (WeldCurrent, WeldVoltage, ElectrodeTemp, ElectrodeWear, etc.)
+- `ns=5` - Production Line (LineState, OEE, Availability, BottleneckMachine, etc.)
+
+See [docs/PRODUCTION_LINE.md](docs/PRODUCTION_LINE.md) for the complete node reference.
 
 ## REST API Output
 

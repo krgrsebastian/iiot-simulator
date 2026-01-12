@@ -48,6 +48,10 @@ type ProductionLineCoordinator struct {
 	// Current order
 	currentOrder *core.ProductionOrder
 
+	// Order-specific tracking (reset per order, not cumulative)
+	orderPartsCompleted  int // Parts completed for current order only
+	orderStartWeldCount  int // Welder's GoodParts when order started
+
 	// Error tracking
 	lastErrorCode    string
 	lastErrorMachine string
@@ -226,6 +230,12 @@ func (c *ProductionLineCoordinator) updateCounters() {
 		c.weldingCompleted = good
 		c.totalPartsCompleted = good
 		c.totalPartsScrap = scrap
+
+		// Calculate order-specific parts completed (delta from order start)
+		c.orderPartsCompleted = good - c.orderStartWeldCount
+		if c.orderPartsCompleted < 0 {
+			c.orderPartsCompleted = 0 // Safety check
+		}
 	}
 
 	if c.pickerRobot != nil {
@@ -269,6 +279,16 @@ func (c *ProductionLineCoordinator) SetOrder(order *core.ProductionOrder) {
 
 	c.currentOrder = order
 
+	// Reset order-specific tracking for new order
+	c.orderPartsCompleted = 0
+	// Capture current welder count as baseline for this order
+	if c.spotWelder != nil {
+		good, _ := c.spotWelder.GetCounters()
+		c.orderStartWeldCount = good
+	} else {
+		c.orderStartWeldCount = 0
+	}
+
 	// Assign order to forming machine (first in line)
 	if c.formingMachine != nil && order != nil {
 		c.formingMachine.AddOrder(order)
@@ -280,6 +300,35 @@ func (c *ProductionLineCoordinator) GetLineState() LineState {
 	c.mu.RLock()
 	defer c.mu.RUnlock()
 	return c.lineState
+}
+
+// GetCurrentOrder returns the current production order
+func (c *ProductionLineCoordinator) GetCurrentOrder() *core.ProductionOrder {
+	c.mu.RLock()
+	defer c.mu.RUnlock()
+	return c.currentOrder
+}
+
+// GetOrderProgress returns the current order progress (completed/total)
+func (c *ProductionLineCoordinator) GetOrderProgress() (completed, total int) {
+	c.mu.RLock()
+	defer c.mu.RUnlock()
+	if c.currentOrder == nil {
+		return 0, 0
+	}
+	// Use order-specific counter, not cumulative
+	return c.orderPartsCompleted, c.currentOrder.Quantity
+}
+
+// IsOrderComplete returns true if the current order is complete
+func (c *ProductionLineCoordinator) IsOrderComplete() bool {
+	c.mu.RLock()
+	defer c.mu.RUnlock()
+	if c.currentOrder == nil {
+		return false
+	}
+	// Use order-specific counter, not cumulative
+	return c.orderPartsCompleted >= c.currentOrder.Quantity
 }
 
 // GetOPCUANodes returns the OPC UA node definitions for the production line
@@ -373,7 +422,8 @@ func (c *ProductionLineCoordinator) GenerateData() map[string]interface{} {
 		data.CurrentOrderID = c.currentOrder.OrderID
 		data.CurrentPartNumber = c.currentOrder.PartNumber
 		if c.currentOrder.Quantity > 0 {
-			data.OrderProgress = float64(c.totalPartsCompleted) / float64(c.currentOrder.Quantity) * 100
+			// Use order-specific counter for progress
+			data.OrderProgress = float64(c.orderPartsCompleted) / float64(c.currentOrder.Quantity) * 100
 		}
 	}
 

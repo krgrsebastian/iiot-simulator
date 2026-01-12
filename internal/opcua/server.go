@@ -32,10 +32,12 @@ const (
 
 // NamespaceNodes holds nodes for a specific namespace
 type NamespaceNodes struct {
-	Namespace  uint16
-	FolderName string
-	VarNodes   map[string]*server.VariableNode
-	Values     map[string]interface{}
+	Namespace   uint16
+	FolderName  string
+	FolderDesc  string
+	NodeDefs    []core.NodeDefinition // Store definitions for deferred registration
+	VarNodes    map[string]*server.VariableNode
+	Values      map[string]interface{}
 }
 
 // Server wraps the OPC UA server and manages node values for multiple namespaces
@@ -244,10 +246,19 @@ func (s *Server) Start(ctx context.Context) error {
 
 	s.srv = srv
 
-	// Register legacy welding nodes for backward compatibility
-	if err := s.createNodes(); err != nil {
-		log.Error().Err(err).Msg("Failed to create OPC UA nodes")
-		return err
+	// Check if there are pending namespaces to register (from production line mode)
+	if len(s.namespaces) > 0 {
+		// Re-register all pending namespaces now that the server is available
+		if err := s.registerPendingNamespaces(); err != nil {
+			log.Error().Err(err).Msg("Failed to register pending namespaces")
+			return err
+		}
+	} else {
+		// Register legacy welding nodes for backward compatibility
+		if err := s.createNodes(); err != nil {
+			log.Error().Err(err).Msg("Failed to create OPC UA nodes")
+			return err
+		}
 	}
 
 	// Start server in background
@@ -277,10 +288,12 @@ func (s *Server) Stop(ctx context.Context) error {
 // RegisterNamespace creates a new namespace with a root folder and variable nodes
 func (s *Server) RegisterNamespace(nsIndex uint16, folderName, folderDesc string, nodes []core.NodeDefinition) error {
 	if s.srv == nil {
-		// Store namespace info even if server is not running (for value storage mode)
+		// Store namespace info for deferred registration when server starts
 		ns := &NamespaceNodes{
 			Namespace:  nsIndex,
 			FolderName: folderName,
+			FolderDesc: folderDesc,
+			NodeDefs:   nodes, // Store for later registration
 			VarNodes:   make(map[string]*server.VariableNode),
 			Values:     make(map[string]interface{}),
 		}
@@ -381,6 +394,72 @@ func (s *Server) UpdateNamespaceValues(nsIndex uint16, values map[string]interfa
 			varNode.SetValue(ua.NewDataValue(value, 0, now, 0, now, 0))
 		}
 	}
+}
+
+// registerPendingNamespaces registers all stored namespaces after server is available
+func (s *Server) registerPendingNamespaces() error {
+	nm := s.srv.NamespaceManager()
+	nodeCount := 0
+
+	for nsIndex, ns := range s.namespaces {
+		// Create folder node under Objects folder
+		folder := server.NewObjectNode(
+			s.srv,
+			ua.NodeIDString{NamespaceIndex: nsIndex, ID: ns.FolderName},
+			ua.QualifiedName{NamespaceIndex: nsIndex, Name: ns.FolderName},
+			ua.LocalizedText{Text: ns.FolderName},
+			ua.LocalizedText{Text: ns.FolderDesc},
+			nil,
+			[]ua.Reference{
+				{
+					ReferenceTypeID: ua.ReferenceTypeIDOrganizes,
+					IsInverse:       true,
+					TargetID:        ua.ExpandedNodeID{NodeID: ua.ObjectIDObjectsFolder},
+				},
+			},
+			0,
+		)
+		nm.AddNode(folder)
+
+		// Create variable nodes from stored definitions
+		for _, nodeDef := range ns.NodeDefs {
+			varNode := server.NewVariableNode(
+				s.srv,
+				ua.NodeIDString{NamespaceIndex: nsIndex, ID: ns.FolderName + "." + nodeDef.Name},
+				ua.QualifiedName{NamespaceIndex: nsIndex, Name: nodeDef.Name},
+				ua.LocalizedText{Text: nodeDef.DisplayName},
+				ua.LocalizedText{Text: nodeDef.Description},
+				nil,
+				[]ua.Reference{
+					{
+						ReferenceTypeID: ua.ReferenceTypeIDHasComponent,
+						IsInverse:       true,
+						TargetID:        ua.ExpandedNodeID{NodeID: ua.NodeIDString{NamespaceIndex: nsIndex, ID: ns.FolderName}},
+					},
+				},
+				ua.NewDataValue(nodeDef.InitialValue, 0, time.Now().UTC(), 0, time.Now().UTC(), 0),
+				core.OPCUADataType(nodeDef.DataType),
+				ua.ValueRankScalar,
+				[]uint32{},
+				ua.AccessLevelsCurrentRead,
+				250.0,
+				false,
+				nil,
+			)
+			nm.AddNode(varNode)
+			ns.VarNodes[nodeDef.Name] = varNode
+			nodeCount++
+		}
+
+		log.Info().
+			Uint16("namespace", nsIndex).
+			Str("folder", ns.FolderName).
+			Int("nodes", len(ns.NodeDefs)).
+			Msg("Registered OPC UA namespace")
+	}
+
+	log.Info().Int("count", nodeCount).Msg("OPC UA nodes registered in address space")
+	return nil
 }
 
 // GetNamespaceValue returns a value from a namespace

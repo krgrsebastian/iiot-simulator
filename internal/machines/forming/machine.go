@@ -121,11 +121,17 @@ func (fm *FormingMachine) updateIdle(now time.Time) {
 	fm.formState.Phase = PhaseIdle
 	fm.formState.CurrentRamPosition = 0 // Ram at top
 
+	// Debug: Log order queue status every few seconds
+	if now.Second()%5 == 0 {
+		fmt.Printf("[DEBUG] FormingMachine.updateIdle: CurrentOrder=%v, OrderQueue len=%d\n", fm.CurrentOrder != nil, len(fm.OrderQueue))
+	}
+
 	// Check if there's an order to work on
 	if fm.CurrentOrder != nil || len(fm.OrderQueue) > 0 {
 		if fm.CurrentOrder == nil {
 			fm.StartNextOrder(now)
 		}
+		fmt.Printf("[DEBUG] FormingMachine: Starting order, transitioning to Setup\n")
 		fm.TransitionTo(core.StateSetup)
 	}
 }
